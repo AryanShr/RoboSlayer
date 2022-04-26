@@ -1,0 +1,622 @@
+#include <stdio.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <stdbool.h>
+#include <math.h>
+// #include "declarations.h"
+
+#define ROW0 0
+#define ROW1 185
+#define ROW2 350
+#define ROW3 500
+
+#define SCREEN_WIDTH 1400
+#define SCREEN_HEIGHT 442
+#define MAX_KEYBOARD_KEYS 350
+#define MAX_MOUSE_KEYS 350
+#define BULLET_SPEED 30
+#define GRAVITY 0.85f
+#define MAX_BULLETS 100
+#define MAX_ENEMY 50
+
+int globaltime = 0;
+int kills = 0;
+
+/*For mouse reading*/
+typedef struct Mouse
+{
+	int button[MAX_MOUSE_KEYS];
+	float angle;
+}mouse;
+typedef struct {
+    SDL_Renderer *renderer;
+    SDL_Window *window;
+	int keyboard[MAX_KEYBOARD_KEYS];
+	mouse mouse;
+}App;
+static App app;
+/*All Entities declaration*/
+typedef struct Entity
+{
+    float x;
+    float y;
+    float dx;
+    float dy;
+    short lives;
+    int onground;
+    int isdead;
+	SDL_Texture *charachter;
+    int facingleft;
+    int frames;
+    int slowingdown;
+	int row;
+}Entity;
+Entity hero;
+Entity *enemy;
+
+/*For bullets*/
+typedef struct Bullet
+{
+	float x,y,dx,dy;
+}Bullet;
+Bullet *bullets[MAX_BULLETS] = {NULL}; 
+
+typedef struct alive
+{	
+	int entityalive;
+}alive;
+alive enemyalive;
+/*For Adding Bullets*/
+void addbullet(float x,float y, float dx,float dy)
+{
+	int found =-1;
+	for (int i =0;i<MAX_BULLETS;i++)
+	{
+		if (bullets[i]==NULL)
+		{
+			found =i;
+			break;
+		}
+	}
+	if (found >= 0)
+	{
+		int i=found;
+		bullets[i] = malloc(sizeof(Bullet));
+		bullets[i]->x = x;
+		bullets[i]->y = y;
+		bullets[i]->dx = dx;
+		bullets[i]->dy = dy;
+	}
+}
+/*Free up space by removing used bullets*/
+void removebullets(int i)
+{
+	if (bullets[i])
+	{
+		free(bullets[i]);
+		bullets[i] = NULL;
+	}
+}
+
+/*Initialising SDL Windows*/
+void initSDL()
+{
+	SDL_Init(SDL_INIT_VIDEO);
+    int rendererFlags, windowFlags;
+
+	rendererFlags = SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC;
+
+	windowFlags = 0;
+
+	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+	{
+		printf("Couldn't initialize SDL: %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	app.window = SDL_CreateWindow("GAME", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, windowFlags);
+
+	if (!app.window)
+	{
+		printf("Failed to open %d x %d window: %s\n", SCREEN_WIDTH, SCREEN_HEIGHT, SDL_GetError());
+		exit(1);
+	}
+
+	// SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+    IMG_Init(IMG_INIT_JPG | IMG_INIT_PNG);
+	app.renderer = SDL_CreateRenderer(app.window, -1, rendererFlags);
+
+	if (!app.renderer)
+	{
+		printf("Failed to create renderer: %s\n", SDL_GetError());
+		exit(1);
+	}
+}
+
+SDL_Texture *generate_img(const char *IMAGE_PATH)
+{
+    // Load an image file
+    SDL_Surface *image = IMG_Load(IMAGE_PATH);
+    if (image == NULL)
+    {
+        printf("error loading surface %s\n",IMAGE_PATH);
+		exit(1);
+    }
+	/*Copying texture form surface then free up the Surface*/
+    SDL_Texture *image_texture = SDL_CreateTextureFromSurface(app.renderer, image);
+    if (image_texture == NULL)
+    {
+        printf("error loading texture %s\n",IMAGE_PATH);
+		exit(1);
+	}
+    SDL_FreeSurface(image);
+    return image_texture;
+}
+
+// To generate background of the game
+void generatebg(SDL_Texture *image)
+{
+	if (image == NULL)
+    {
+        printf("error loading background\n");
+		exit(1);
+    }
+    SDL_Rect texture_destination;
+    texture_destination.x = 0;
+    texture_destination.y = 0;
+    texture_destination.w = SCREEN_WIDTH;
+    texture_destination.h = SCREEN_HEIGHT;
+    SDL_RenderCopy(app.renderer,image, NULL,&texture_destination);
+}
+
+//to destroy the SDL window
+void destroy()
+{
+    SDL_DestroyRenderer(app.renderer);
+    SDL_DestroyWindow(app.window);
+    IMG_Quit();
+    SDL_Quit();
+    printf("SDL destroyed\n");
+}
+void doKeyDown(SDL_KeyboardEvent *event)
+{
+	if (event->repeat == 0 && event->keysym.scancode < MAX_KEYBOARD_KEYS)
+	{
+		app.keyboard[event->keysym.scancode] = 1;
+	}
+}
+void doKeyUp(SDL_KeyboardEvent *event)
+{
+	if (event->repeat == 0 && event->keysym.scancode < MAX_KEYBOARD_KEYS)
+	{
+		app.keyboard[event->keysym.scancode] = 0;
+	}
+}
+void doMouseButtonUp(SDL_MouseButtonEvent *event)
+{
+	app.mouse.button[event->button] = 0;
+}
+
+void doMouseButtonDown(SDL_MouseButtonEvent *event)
+{
+	app.mouse.button[event->button] = 1;
+}
+void doInput()
+{
+	SDL_Event event;
+	while (SDL_PollEvent(&event))
+	{
+		switch (event.type)
+		{
+            // printf("%s\n",event.type);
+			case SDL_QUIT :
+				{destroy();
+				exit(0);
+				break;}
+            case SDL_KEYDOWN:
+			{
+				doKeyDown(&event.key);
+			}
+				break;
+
+			case SDL_KEYUP:
+				doKeyUp(&event.key);
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				doMouseButtonDown(&event.button);
+				break;
+
+			case SDL_MOUSEBUTTONUP:
+				doMouseButtonUp(&event.button);
+				break;
+			default:
+				break;
+		}
+	}
+} 
+typedef struct cross_hair
+{
+	SDL_Texture *Texture;
+	float x,y,dx,dy;
+}cross_hair;
+cross_hair crosshair;
+void doplayer()
+{
+	if (app.mouse.button[SDL_BUTTON_RIGHT])
+	{
+		int x,y;
+		SDL_PumpEvents();
+		SDL_GetMouseState(&x,&y);
+		app.mouse.angle = atan2(y-hero.y+70,x-hero.x+50);
+		if (app.mouse.angle >90)
+		{
+			app.mouse.angle = 180-app.mouse.angle;
+		}
+		printf("%d %d\n",x,y);
+		crosshair.Texture = generate_img("img/crosshair.png");
+		crosshair.x = x - hero.x+50;
+		crosshair.y = y - hero.y+70;
+		printf("%f %f\n",crosshair.x,crosshair.y);
+		SDL_Rect crosshair_source = {0,0,60,62};
+		// cross cordinates not finished
+		SDL_Rect crosshair_destination = {crosshair.x,crosshair.y,60,62};
+		SDL_RenderCopyEx(app.renderer,crosshair.Texture,&crosshair_source,&crosshair_destination,0,NULL,0);
+	}
+	if (app.mouse.button[SDL_BUTTON_LEFT])
+	{
+			int x,y;
+		
+			SDL_PumpEvents();
+			SDL_GetMouseState(&x,&y);
+			if (hero.facingleft ==0 && x>hero.x)
+			{
+				app.mouse.angle = atan2(y-hero.y+70,x-hero.x+50);
+			}
+			else if (hero.facingleft==1 && x<hero.x)
+			{
+				app.mouse.angle = atan2(y-hero.y+70,x-hero.x+50);
+			}
+			if (app.mouse.angle >90)
+			{
+				app.mouse.angle = 180-app.mouse.angle;
+			}
+			if (globaltime%6==0)
+			{
+				hero.row = ROW0;
+				hero.frames = 4;
+				hero.frames++;
+				addbullet(hero.x+50,hero.y+70, BULLET_SPEED*cos(app.mouse.angle),-BULLET_SPEED*sin(app.mouse.angle));
+				hero.frames=hero.frames%2+4;
+			}
+		
+	}
+	if (app.keyboard[SDL_SCANCODE_ESCAPE])
+	{
+		destroy();
+		exit(0);
+	}
+	if (hero.y<260 && hero.onground==0)
+	{
+		// hero.dy = 0;
+		hero.dy+=GRAVITY;
+		// hero.onground =1;
+	}
+	else
+	{
+		hero.onground =1;	
+		hero.dy = 0;
+		if (app.keyboard[SDL_SCANCODE_UP])
+		{
+			if (hero.y<420)
+			{
+				hero.row = ROW3;
+				hero.frames = 1;
+			}
+			// else
+			{hero.dy = -15;
+			hero.onground = 0;
+			printf("up\n");}
+		}
+		// if (app.keyboard[SDL_SCANCODE_DOWN])
+		// {
+		// 	hero.dy = PLAYER_SPEED;
+		// 	printf("down\n");
+		// }
+		else if (app.keyboard[SDL_SCANCODE_LEFT])
+		{
+			hero.facingleft = 1;
+			if (hero.x<-1)
+			{
+				hero.dx = 0;
+			}
+			else
+			{
+				hero.dx -= 1.0f;
+				if (globaltime%3 == 0)
+				{
+					hero.frames++;
+					hero.frames%=4;
+					hero.row = ROW1;
+				}
+				if (hero.dx <-15)
+				{
+					hero.dx = -15;
+				if (globaltime%3 == 0)
+				{hero.frames++;
+				hero.frames%=2;
+				hero.row = ROW2;
+				}
+
+				}
+				printf("left\n");
+			}
+		}
+		else if (app.keyboard[SDL_SCANCODE_RIGHT])
+		{
+			hero.facingleft = 0;
+			if (hero.x>1300)
+			{
+				hero.dx = 0;
+			}
+			else
+			{
+				hero.dx += 0.5;
+				if (globaltime%3 == 0)
+				{
+					hero.frames++;
+					hero.frames%=4;
+					hero.row = ROW1;
+				}
+				if (hero.dx >15)
+				{
+					hero.dx = 15;
+				if (globaltime%3 == 0)
+				{hero.frames++;
+				hero.frames%=2;
+				hero.row = ROW2;
+				}
+				}
+				printf("right\n");
+			}
+		}
+		else
+		{
+			hero.dx *=0.8;
+			hero.row = ROW1;
+			hero.frames = 1;
+			if (fabsf(hero.x)<0.1f)
+			{
+				hero.dx = 0;
+			}
+		}
+	}
+	hero.x +=hero.dx;
+	hero.y +=hero.dy;
+	for(int i = 0; i< MAX_BULLETS;i++) if(bullets[i])
+	{
+		bullets[i]->x +=bullets[i]->dx;
+		bullets[i]->dy += GRAVITY;
+		bullets[i]->y += bullets[i]->dy;
+		if (fabs(bullets[i]->y)<=0.1)
+		{
+			bullets[i]->dy = BULLET_SPEED*sin(app.mouse.angle);
+		}
+		// printf("%f %f\n",bullets[i]->dy,bullets[i]->dx);
+		// for test purposes
+		if (enemyalive.entityalive ==1)
+		{if (bullets[i]->x >enemy->x && bullets[i]->x < enemy->x+50 && bullets[i]->y>enemy->y && bullets[i]->y <enemy->y+50)
+		{
+			enemy->isdead = 1;
+			enemy->frames = 0;
+			kills++;
+			removebullets(i);
+		}}
+		else if (bullets[i]->x>1300 ||bullets[i]->y<10||bullets[i]->y>400)
+		{
+			removebullets(i);
+		}
+	}
+	globaltime = (globaltime + 1)%10;
+}
+SDL_Texture *bullettexture;
+void initPlayer(SDL_Texture *player,int x,int y)
+{
+	if (player == NULL)
+	{
+		printf("error initiating player..\n");
+		exit(1);
+	}
+	SDL_Rect player_source = {hero.frames*100,hero.row,100,135};
+	SDL_Rect player_destination = {x,y,100,135};
+	SDL_RenderCopyEx(app.renderer,player,&player_source,&player_destination,0,NULL,hero.facingleft);
+	for (int i= 0;i<MAX_BULLETS;i++)if(bullets[i])
+	{
+		SDL_Rect rect = {bullets[i]->x,bullets[i]->y,18,18};
+		SDL_RenderCopy(app.renderer,bullettexture, NULL,&rect);
+	}
+}
+int localtime = 0;
+void spawnenemy()
+{
+	enemy->charachter = generate_img("img/RoboEnemy.png");
+	if (enemy->charachter == NULL)
+	{
+		printf("Check your Damn Path again\n");
+		exit(1);
+	}
+	if (localtime%3==0 && enemy->isdead==0)
+	{
+		enemy->frames++;
+		enemy->frames%=9;
+		enemy->x-=enemy->dx;
+	}
+	if (enemy->x <= hero.x)
+	{
+		enemy->dx =0;
+		enemy->frames = 7;
+	}
+	else
+	{
+		enemy->dx = 5;
+	}
+	if (enemy->isdead==1)
+	{
+		enemy->row =0;
+		enemy->dx = 0;
+		if (localtime%5 == 0 && enemy->frames<6)
+		{
+				enemy->frames ++;
+		}
+		// enemy->frames%=5;
+	}
+	SDL_Rect enemy_source = {enemy->frames*95,enemy->row,90,100};
+	SDL_Rect enemy_distination = {enemy->x,enemy->y,120,135};
+	SDL_RenderCopyEx(app.renderer,enemy->charachter,&enemy_source,&enemy_distination,0,NULL,1);
+	if (enemy->isdead == 1 && enemy->frames ==5 && enemy->row ==0)
+	{
+		enemy->isdead =0;
+		enemy->frames = 0;
+		enemyalive.entityalive = 0;
+		free(enemy);
+	}
+	localtime = (localtime+1)%10;
+}
+
+// void spawnmultipleenemies()
+// {
+// 	for (int i = 0;i<10;i++)
+// 	{
+// 		spawnenemy();
+// 	}
+// }
+int main(int argc, char *argv[])
+{
+	memset(&app,0,sizeof(App));
+	initSDL();
+	memset(&hero,0,sizeof(Entity));
+	enemy =malloc(sizeof(Entity));
+	memset(enemy,0,sizeof(Entity));
+	enemyalive.entityalive = 1;
+	enemy->isdead =0;
+	hero.x =0;
+	hero.y=0;
+	enemy->x = 1450;
+	enemy->y = 260;
+	enemy->dx = 5;
+	enemy->row = 100;
+	enemy->isdead =0;
+	hero.onground = 0;
+	hero.frames = 1;
+	hero.row = ROW1;
+	enemy->frames = 0;
+	bullettexture = generate_img("img/bullet.png");
+	while(1)
+	{
+		SDL_RenderClear(app.renderer);
+		SDL_Texture *bg = generate_img("img/bg1.png");
+		generatebg(bg);
+		hero.charachter = generate_img("img/Characterspritesbw.png");
+		initPlayer(hero.charachter,hero.x,hero.y);
+		if (enemyalive.entityalive == 1)
+			{spawnenemy();}
+		doInput();
+		doplayer();
+		SDL_RenderPresent(app.renderer);
+		SDL_Delay(8);
+		SDL_DestroyTexture(hero.charachter);
+		SDL_DestroyTexture(crosshair.Texture);
+		// SDL_DestroyTexture(enemy->charachter);
+		SDL_DestroyTexture(bg);
+
+	}
+	return 0;
+}
+
+/*
+remaing tasks:
+	crosshair location
+	shoot animation fix
+	random enemy spawns
+	score
+	health hero
+	health of enemy
+
+*/
+
+/*
+24-02-2022
+// int Randoms(int lower, int upper)
+// {
+// 	srand(time(0));
+//     int num = (rand()%(upper - lower + 1)) + lower;
+//     return num;
+// }
+
+// Entity *enemies[MAX_ENEMY];
+// void initEnemies()
+// {
+// 	int c=0;
+// 	for (int i = 0;i<MAX_ENEMY;i++)
+// 	{
+// 		if (enemies[i]==NULL)
+// 		{
+// 			enemies[i]= malloc(sizeof(Entity));
+// 			memset(enemies[i],0,sizeof(Entity));
+// 		}
+// 		// enemies[i]->isdead =0;
+// 		enemies[i]->row = 100;
+// 		enemies[i]->x = 900+c;
+// 		enemies[i]->y = 260;
+// 		enemies[i]->dx = 5;
+// 		enemies[i]->frames = 0;
+// 		c+=300;
+// 		enemies[i]->charachter = generate_img("img/RoboEnemy.png");
+// 	}
+// }
+// void destroyenemies(int i)
+// {
+// 	free(enemies[i]);
+// 	enemies[i] = NULL;
+// }
+// void enemyspawn()
+// {
+// 	for (int i = 0;i<MAX_ENEMY;i++)
+// 	{
+// 		enemies[i]->frames++;
+// 		enemies[i]->x -=enemies[i]->dx;
+// 		enemies[i]->frames%=6;
+// 		SDL_Rect enemy_source = {enemies[i]->frames*95,enemies[i]->row,90,100};
+// 		SDL_Rect enemy_distination = {enemies[i]->x,enemies[i]->y,120,135};
+// 		SDL_RenderCopyEx(app.renderer,enemies[i]->charachter,&enemy_source,&enemy_distination,0,NULL,1);
+// 		if (enemies[i]->isdead ==1)
+// 		{
+// 			destroyenemies(i);
+// 		}
+// 	}
+// }
+// void destroyenemytexture()
+// {
+// 	for (int i = 0;i<MAX_ENEMY;i++)
+// 	{
+// 		SDL_DestroyTexture(enemies[i]->charachter);
+// 	}
+// }
+
+
+
+do player
+
+// for (int j = 0;j<MAX_ENEMY;j++)
+		// {	
+		// 	if (collide2d(bullets[i]->x,bullets[i]->y,enemies[j]->x,enemies[j]->y,18,18,120,135))
+		// 	{
+		// 		if (enemies[j]->isdead==0)
+		// 		{
+		// 			enemies[j]->isdead =1;
+		// 			enemies[j]->frames = 0;
+		// 			enemyalive.entityalive --;
+		// 			kills++;
+		// 			removebullets(i);
+		// 		}
+		// 	}
+*/
