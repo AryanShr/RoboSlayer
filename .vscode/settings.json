@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "sdl.h": "c",
+        "sdl_main.h": "c",
+        "sdl_stdinc.h": "c",
+        "sdl_config.h": "c",
+        "_real_sdl_config.h": "c",
+        "stdio.h": "c",
+        "sdl_render.h": "c",
+        "sdl_rwops.h": "c",
+        "sdl_system.h": "c",
+        "sdl_sensor.h": "c",
+        "sdl_power.h": "c",
+        "sdl_mixer.h": "c",
+        "stdbool.h": "c",
+        "backup": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
+}

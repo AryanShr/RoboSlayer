@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "SDL2",
+			"command": "D:\\msys64\\mingw64\\bin\\gcc.exe",
+			"args": [
+				"-g",
+				"src\\*.c",
+				"-o",
+				"build\\main.exe",
+				"-IC:/Windows_and_Ubuntu/Codes/oop/RPG game/SDL2-2.0.20/include",
+				"-LD:/msys64/mingw64/lib",
+				"-lmingw64",
+				"-lSDL2main",
+				"-lSDL2",
+				"-mwindows"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
