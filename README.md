@@ -14,3 +14,10 @@ Controls
 - right mouse click&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;     - for crosshair to aim<br>
 - esc or cross button&nbsp;&nbsp;   - to exit<br>
 - end Screen&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;   - press anywhere on the game window to exit.<br>
+
+<br /> ScreenShots
+
+<img src = "startscreen.png"><br />
+<img src="game-screen1.png"><br />
+<img src="game-screen2.png"><br />
+<img src="endscreen.png"><br />
